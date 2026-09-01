@@ -1,16 +1,16 @@
 {
-  "name": "La Juliana - Gestión de Catering",
-  "short_name": "La Juliana",
-  "description": "Aplicación de Gestión de Catering y Eventos para La Juliana",
+  "name": "La Juliana - Compras de Eventos",
+  "short_name": "Compras Eventos",
+  "description": "Aplicación de Gestión de Compras y Catering para La Juliana",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#263824",
-  "theme_color": "#263824",
+  "background_color": "#ffffff",
+  "theme_color": "#1e3a8a",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "/app_logo.jpg",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/jpeg",
       "purpose": "any maskable"
     }
   ]

@@ -45,8 +45,8 @@ export default function Layout() {
         style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}
       >
         <div className="flex items-center gap-2 text-sidebar-primary">
-          <ChefHat className="w-6 h-6" />
-          <span className="font-heading text-lg font-semibold">Juliana</span>
+          <img src="/app_logo.jpg" alt="Logo" className="w-8 h-8 rounded-lg object-cover border border-sidebar-border/30 shadow-sm" />
+          <span className="font-heading text-lg font-bold">La Juliana</span>
         </div>
         <button
           onClick={showBack ? handleTopBarClick : () => setMobileOpen(!mobileOpen)}
@@ -64,12 +64,10 @@ export default function Layout() {
       `}>
         <div className="p-6 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center">
-              <ChefHat className="w-6 h-6 text-accent" />
-            </div>
+            <img src="/app_logo.jpg" alt="Logo" className="w-10 h-10 rounded-xl object-cover border border-sidebar-border/40 shadow-sm" />
             <div>
-              <h1 className="font-heading text-lg font-semibold text-sidebar-primary">La Juliana</h1>
-              <p className="text-xs text-sidebar-foreground/60">Gestión de Catering</p>
+              <h1 className="font-heading text-lg font-bold text-sidebar-primary">La Juliana</h1>
+              <p className="text-xs text-sidebar-foreground/70">Compras de Eventos</p>
             </div>
           </div>
         </div>
