@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Check, Square } from 'lucide-react';
+import { Check, Square, Utensils, Users } from 'lucide-react';
 
 const estados = [
   { value: 'borrador', label: 'Borrador' },
@@ -21,6 +21,7 @@ export default function EventoDialog({ open, onOpenChange, evento, menus, onSave
     fecha: '',
     cantidad_comensales: 0,
     menus_ids: [],
+    menu_comensales: {},
     estado: 'borrador',
     notas: '',
   });
@@ -33,6 +34,7 @@ export default function EventoDialog({ open, onOpenChange, evento, menus, onSave
         fecha: evento.fecha || '',
         cantidad_comensales: evento.cantidad_comensales || 0,
         menus_ids: evento.menus_ids || [],
+        menu_comensales: evento.menu_comensales || {},
         estado: evento.estado || 'borrador',
         notas: evento.notas || '',
       });
@@ -43,6 +45,7 @@ export default function EventoDialog({ open, onOpenChange, evento, menus, onSave
         fecha: '',
         cantidad_comensales: 0,
         menus_ids: [],
+        menu_comensales: {},
         estado: 'borrador',
         notas: '',
       });
@@ -50,12 +53,52 @@ export default function EventoDialog({ open, onOpenChange, evento, menus, onSave
   }, [evento, open]);
 
   const toggleMenu = (menuId) => {
+    setFormData(prev => {
+      const isSelected = prev.menus_ids.includes(menuId);
+      const newIds = isSelected
+        ? prev.menus_ids.filter(id => id !== menuId)
+        : [...prev.menus_ids, menuId];
+
+      const newMenuComensales = { ...prev.menu_comensales };
+      if (!isSelected && newMenuComensales[menuId] === undefined) {
+        newMenuComensales[menuId] = prev.cantidad_comensales || 0;
+      } else if (isSelected) {
+        delete newMenuComensales[menuId];
+      }
+
+      return {
+        ...prev,
+        menus_ids: newIds,
+        menu_comensales: newMenuComensales,
+      };
+    });
+  };
+
+  const handleMenuComensalesChange = (menuId, value) => {
+    const val = parseInt(value) || 0;
     setFormData(prev => ({
       ...prev,
-      menus_ids: prev.menus_ids.includes(menuId)
-        ? prev.menus_ids.filter(id => id !== menuId)
-        : [...prev.menus_ids, menuId],
+      menu_comensales: {
+        ...prev.menu_comensales,
+        [menuId]: val
+      }
     }));
+  };
+
+  const handleTotalComensalesChange = (value) => {
+    const total = parseInt(value) || 0;
+    setFormData(prev => {
+      // If single menu selected or menu_comensales empty, sync default
+      const updatedMenuComensales = { ...prev.menu_comensales };
+      if (prev.menus_ids.length === 1) {
+        updatedMenuComensales[prev.menus_ids[0]] = total;
+      }
+      return {
+        ...prev,
+        cantidad_comensales: total,
+        menu_comensales: updatedMenuComensales,
+      };
+    });
   };
 
   const handleSubmit = (e) => {
@@ -63,9 +106,16 @@ export default function EventoDialog({ open, onOpenChange, evento, menus, onSave
     onSave(formData);
   };
 
+  const totalAssignedComensales = formData.menus_ids.reduce((sum, id) => {
+    const count = formData.menu_comensales[id] !== undefined
+      ? formData.menu_comensales[id]
+      : formData.cantidad_comensales;
+    return sum + count;
+  }, 0);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{evento ? 'Editar evento' : 'Nuevo evento'}</DialogTitle>
         </DialogHeader>
@@ -104,13 +154,13 @@ export default function EventoDialog({ open, onOpenChange, evento, menus, onSave
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="ev-comensales">Comensales</Label>
+              <Label htmlFor="ev-comensales">Comensales totales del evento</Label>
               <Input
                 id="ev-comensales"
                 type="number"
                 min="0"
                 value={formData.cantidad_comensales}
-                onChange={(e) => setFormData({ ...formData, cantidad_comensales: parseInt(e.target.value) || 0 })}
+                onChange={(e) => handleTotalComensalesChange(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -124,37 +174,80 @@ export default function EventoDialog({ open, onOpenChange, evento, menus, onSave
             </div>
           </div>
 
-          {/* Menu selection */}
-          <div className="space-y-2 rounded-lg border border-border p-4 bg-muted/30">
-            <Label className="text-sm font-semibold">Menús seleccionados</Label>
+          {/* Menus and Mixed Menu comensales configuration */}
+          <div className="space-y-3 rounded-xl border border-border p-4 bg-muted/30">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-semibold flex items-center gap-1.5">
+                  <Utensils className="w-4 h-4 text-primary" /> Menús seleccionados (Menú Mixto)
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Seleccioná los menús y asigná cuántas personas consumirán cada uno.
+                </p>
+              </div>
+              {formData.menus_ids.length > 1 && (
+                <span className={`text-xs font-semibold px-2 py-1 rounded-md ${
+                  totalAssignedComensales === formData.cantidad_comensales
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                }`}>
+                  Suma menús: {totalAssignedComensales} / {formData.cantidad_comensales} pers
+                </span>
+              )}
+            </div>
+
             {menus.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">No hay menús creados. Creá al menos uno primero.</p>
             ) : (
-              <div className="space-y-1.5 mt-1">
+              <div className="space-y-2 mt-2">
                 {menus.map(m => {
                   const selected = formData.menus_ids.includes(m.id);
+                  const currentComensales = formData.menu_comensales[m.id] !== undefined
+                    ? formData.menu_comensales[m.id]
+                    : formData.cantidad_comensales;
+
                   return (
-                    <button
+                    <div
                       key={m.id}
-                      type="button"
-                      onClick={() => toggleMenu(m.id)}
-                      className={`flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm transition-all border ${
+                      className={`rounded-lg border transition-all ${
                         selected
-                          ? 'bg-primary/10 border-primary/30 text-foreground'
-                          : 'bg-card border-border hover:bg-muted/50'
+                          ? 'bg-card border-primary/40 shadow-sm p-3'
+                          : 'bg-card border-border hover:bg-muted/40 p-2.5'
                       }`}
                     >
-                      <span className={`flex-shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {selected ? <Check className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-                      </span>
-                      <div className="text-left">
-                        <span className="font-medium">{m.nombre}</span>
-                        {m.tipo && <span className="text-muted-foreground ml-2">· {m.tipo}</span>}
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleMenu(m.id)}
+                          className="flex items-center gap-2.5 text-left flex-1 select-none"
+                        >
+                          <span className={`flex-shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`}>
+                            {selected ? <Check className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                          </span>
+                          <div>
+                            <span className="font-semibold text-sm">{m.nombre}</span>
+                            {m.tipo && <span className="text-xs text-muted-foreground ml-2">({m.tipo})</span>}
+                          </div>
+                        </button>
+
+                        {selected && (
+                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-1.5 bg-muted/60 px-2 py-1 rounded-md border border-border">
+                              <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                              <Input
+                                type="number"
+                                min="0"
+                                value={currentComensales}
+                                onChange={(e) => handleMenuComensalesChange(m.id, e.target.value)}
+                                className="w-16 h-7 text-right font-bold text-xs bg-background px-1"
+                                placeholder="0"
+                              />
+                              <span className="text-xs text-muted-foreground font-medium">pers.</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      {m.items && (
-                        <span className="ml-auto text-xs text-muted-foreground">{m.items.length} productos</span>
-                      )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>

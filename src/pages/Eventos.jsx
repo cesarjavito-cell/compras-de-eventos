@@ -128,13 +128,22 @@ export default function Eventos() {
                   </span>
                 </div>
 
-                {menuNames.length > 0 && (
+                {ev.menus_ids && ev.menus_ids.length > 0 && (
                   <div className="mt-3 flex items-start gap-2">
                     <UtensilsCrossed className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                     <div className="flex flex-wrap gap-1">
-                      {menuNames.map((name, i) => (
-                        <span key={i} className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent font-medium">{name}</span>
-                      ))}
+                      {ev.menus_ids.map(menuId => {
+                        const m = menus.find(x => x.id === menuId);
+                        if (!m) return null;
+                        const diners = ev.menu_comensales?.[menuId] !== undefined
+                          ? ev.menu_comensales[menuId]
+                          : ev.cantidad_comensales;
+                        return (
+                          <span key={menuId} className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent font-medium">
+                            {m.nombre} <span className="font-bold opacity-80">({diners} pers.)</span>
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

@@ -103,7 +103,14 @@ export default function CalculoCompra() {
     const productMap = new Map(productos.map(p => [p.id, p]));
     const aggregated = new Map();
 
+    const totalComensales = selectedEvento.cantidad_comensales || 0;
+    const menuComensalesMap = selectedEvento.menu_comensales || {};
+
     for (const menu of eventMenus) {
+      const menuDiners = menuComensalesMap[menu.id] !== undefined
+        ? (parseFloat(menuComensalesMap[menu.id]) || 0)
+        : totalComensales;
+
       for (const item of (menu.items || [])) {
         const product = productMap.get(item.producto_id);
         const key = item.producto_id;
@@ -112,22 +119,25 @@ export default function CalculoCompra() {
           producto_nombre: item.producto_nombre || product?.nombre || 'Desconocido',
           categoria: product?.categoria || 'Otros',
           unidad: item.unidad || product?.unidad || 'unidad',
-          cantidad_por_persona: 0,
+          cantidad_total_calculada: 0,
           menu_nombres: [],
         };
-        existing.cantidad_por_persona += item.cantidad_por_persona || 0;
-        if (!existing.menu_nombres.includes(menu.nombre)) {
-          existing.menu_nombres.push(menu.nombre);
+
+        const itemQtyForThisMenu = (item.cantidad_por_persona || 0) * menuDiners;
+        existing.cantidad_total_calculada += itemQtyForThisMenu;
+
+        const menuLabel = `${menu.nombre}${eventMenus.length > 1 ? ` (${menuDiners} pers)` : ''}`;
+        if (!existing.menu_nombres.includes(menuLabel)) {
+          existing.menu_nombres.push(menuLabel);
         }
         aggregated.set(key, existing);
       }
     }
 
-    const comensales = selectedEvento.cantidad_comensales || 0;
     const items = Array.from(aggregated.values()).map(item => {
       const product = productMap.get(item.producto_id);
       const precio = product?.precio_actual || 0;
-      const cantidad_total = item.cantidad_por_persona * comensales;
+      const cantidad_total = item.cantidad_total_calculada;
 
       const isChecked = !!checkedMap[item.producto_id];
       const customQtyRaw = customQtyMap[item.producto_id];
@@ -156,10 +166,10 @@ export default function CalculoCompra() {
     }
 
     const costoTotal = items.reduce((s, i) => s + i.rowCost, 0);
-    const costoPorPersona = comensales > 0 ? costoTotal / comensales : 0;
+    const costoPorPersona = totalComensales > 0 ? costoTotal / totalComensales : 0;
     const checkedCount = items.filter(i => i.isChecked).length;
 
-    return { items, grouped, costoTotal, costoPorPersona, eventMenus, comensales, checkedCount };
+    return { items, grouped, costoTotal, costoPorPersona, eventMenus, comensales: totalComensales, checkedCount, menuComensalesMap };
   }, [selectedEvento, menus, productos, checkedMap, customQtyMap]);
 
   const toggleCat = (cat) => setExpandedCats(prev => ({ ...prev, [cat]: !prev[cat] }));
@@ -189,7 +199,7 @@ export default function CalculoCompra() {
       <div className="flex items-center justify-between flex-wrap gap-4 print:hidden">
         <div>
           <h1 className="text-3xl font-heading font-semibold">Cálculo de Compra</h1>
-          <p className="text-muted-foreground mt-1">Lista de insumos totales, stock disponible y costos del evento</p>
+          <p className="text-muted-foreground mt-1">Lista de insumos totales, menús mixtos y costos del evento</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           {calc && (
@@ -266,7 +276,7 @@ export default function CalculoCompra() {
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-muted-foreground" />
                 <div>
-                  <p className="text-xs text-muted-foreground">Comensales</p>
+                  <p className="text-xs text-muted-foreground">Comensales totales</p>
                   <p className="text-sm font-medium">{calc.comensales}</p>
                 </div>
               </div>
@@ -287,11 +297,16 @@ export default function CalculoCompra() {
             </div>
             {calc.eventMenus.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border">
-                {calc.eventMenus.map(m => (
-                  <span key={m.id} className="text-xs px-2.5 py-1 rounded-full bg-accent/10 text-accent font-medium">
-                    {m.nombre}
-                  </span>
-                ))}
+                {calc.eventMenus.map(m => {
+                  const diners = calc.menuComensalesMap[m.id] !== undefined
+                    ? calc.menuComensalesMap[m.id]
+                    : calc.comensales;
+                  return (
+                    <span key={m.id} className="text-xs px-2.5 py-1 rounded-full bg-accent/10 text-accent font-medium">
+                      {m.nombre} <span className="font-bold opacity-90">({diners} pers.)</span>
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -309,7 +324,7 @@ export default function CalculoCompra() {
               <div className="rounded-xl border border-border bg-card p-5">
                 <Users className="w-5 h-5 text-muted-foreground" />
                 <p className="text-3xl font-heading font-bold mt-2">{formatPrice(calc.costoPorPersona)}</p>
-                <p className="text-sm text-muted-foreground">Costo por comensal</p>
+                <p className="text-sm text-muted-foreground">Costo promedio por comensal</p>
               </div>
               <div className="rounded-xl border border-border bg-card p-5">
                 <Package className="w-5 h-5 text-muted-foreground" />
