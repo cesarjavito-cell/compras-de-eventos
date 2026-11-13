@@ -97,11 +97,24 @@ export default function Ajustes() {
                 reader.onload = (event) => {
                   try {
                     const data = JSON.parse(event.target.result);
+                    if (!data || typeof data !== 'object') {
+                      throw new Error('El archivo no contiene un formato JSON válido');
+                    }
+                    const confirmed = window.confirm(
+                      '¿Estás seguro de que querés importar esta copia de seguridad?\n\n' +
+                      'Se actualizarán tus productos, menús, recetas y eventos con los datos del archivo.'
+                    );
+                    if (!confirmed) {
+                      e.target.value = '';
+                      return;
+                    }
                     base44.importAllData(data);
                     toast.success('Datos importados correctamente');
                     setTimeout(() => window.location.reload(), 1000);
                   } catch (err) {
-                    toast.error('El archivo JSON no es válido');
+                    toast.error(err.message || 'El archivo JSON no es válido');
+                  } finally {
+                    e.target.value = '';
                   }
                 };
                 reader.readAsText(file);

@@ -414,19 +414,97 @@ export const base44 = {
     notifyCloudSync();
   },
   exportAllData: () => {
+    const ajustes_cantidades = {};
+    const productos_en_deposito = {};
+
+    if (typeof window !== 'undefined' && window.localStorage) {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        if (key.startsWith('catering_calc_qty_')) {
+          const eventId = key.replace('catering_calc_qty_', '');
+          try {
+            const parsed = JSON.parse(localStorage.getItem(key));
+            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+              ajustes_cantidades[eventId] = parsed;
+            }
+          } catch {}
+        } else if (key.startsWith('catering_calc_check_')) {
+          const eventId = key.replace('catering_calc_check_', '');
+          try {
+            const parsed = JSON.parse(localStorage.getItem(key));
+            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+              productos_en_deposito[eventId] = parsed;
+            }
+          } catch {}
+        }
+      }
+    }
+
     return {
+      version: '2.0',
+      app: 'compras-de-eventos',
       productos: getLocalEntityData('Producto'),
       categorias: getLocalEntityData('Categoria'),
       menus: getLocalEntityData('Menu'),
       eventos: getLocalEntityData('Evento'),
+      ajustes_cantidades,
+      productos_en_deposito,
       export_date: new Date().toISOString()
     };
   },
   importAllData: (data) => {
-    if (data.productos) setLocalEntityData('Producto', data.productos);
-    if (data.categorias) setLocalEntityData('Categoria', data.categorias);
-    if (data.menus) setLocalEntityData('Menu', data.menus);
-    if (data.eventos) setLocalEntityData('Evento', data.eventos);
+    if (!data || typeof data !== 'object') {
+      throw new Error('El archivo no contiene un objeto JSON válido');
+    }
+
+    // Validación estricta previa para evitar sobrescrituras parciales ante archivos corruptos
+    if (data.productos !== undefined && !Array.isArray(data.productos)) {
+      throw new Error('El formato de "productos" no es válido (debe ser una lista)');
+    }
+    if (data.categorias !== undefined && !Array.isArray(data.categorias)) {
+      throw new Error('El formato de "categorias" no es válido (debe ser una lista)');
+    }
+    if (data.menus !== undefined && !Array.isArray(data.menus)) {
+      throw new Error('El formato de "menus" no es válido (debe ser una lista)');
+    }
+    if (data.eventos !== undefined && !Array.isArray(data.eventos)) {
+      throw new Error('El formato de "eventos" no es válido (debe ser una lista)');
+    }
+    if (!data.productos && !data.categorias && !data.menus && !data.eventos) {
+      throw new Error('El archivo no contiene datos compatibles de Compras de Eventos');
+    }
+
+    // 1. Restaurar entidades base si están presentes
+    if (Array.isArray(data.productos)) setLocalEntityData('Producto', data.productos);
+    if (Array.isArray(data.categorias)) setLocalEntityData('Categoria', data.categorias);
+    if (Array.isArray(data.menus)) setLocalEntityData('Menu', data.menus);
+    if (Array.isArray(data.eventos)) setLocalEntityData('Evento', data.eventos);
+
+    // 2. Restaurar ajustes de cálculo si están presentes (soporte retrocompatible con backups antiguos)
+    if (typeof window !== 'undefined' && window.localStorage) {
+      if (data.ajustes_cantidades && typeof data.ajustes_cantidades === 'object') {
+        for (const [eventId, qtyMap] of Object.entries(data.ajustes_cantidades)) {
+          if (eventId && qtyMap && typeof qtyMap === 'object') {
+            try {
+              localStorage.setItem(`catering_calc_qty_${eventId}`, JSON.stringify(qtyMap));
+            } catch {}
+          }
+        }
+      }
+
+      if (data.productos_en_deposito && typeof data.productos_en_deposito === 'object') {
+        for (const [eventId, checkMap] of Object.entries(data.productos_en_deposito)) {
+          if (eventId && checkMap && typeof checkMap === 'object') {
+            try {
+              localStorage.setItem(`catering_calc_check_${eventId}`, JSON.stringify(checkMap));
+            } catch {}
+          }
+        }
+      }
+    }
+
     notifyCloudSync();
+    return true;
   }
 };

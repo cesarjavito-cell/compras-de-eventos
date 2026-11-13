@@ -183,4 +183,26 @@
   .overflow-x-auto, .overflow-y-auto, .overflow-hidden, .overflow-auto {
     overflow: visible !important;
   }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Evitar encabezados de categoría huérfanos al final de página */
+  .category-header-btn {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  thead {
+    display: table-header-group;
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  tbody tr:first-child {
+    break-before: avoid !important;
+    page-break-before: avoid !important;
+  }
 }

@@ -361,7 +361,7 @@ export default function CalculoCompra() {
               <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <h3 className="font-heading font-semibold">Lista de Compra y Control de Depósito</h3>
-                  <p className="text-xs text-muted-foreground">Tildá los productos que ya tenés o ajustá la cantidad si tenés stock parcial.</p>
+                  <p className="text-xs text-muted-foreground print:hidden">Tildá los productos que ya tenés o ajustá la cantidad si tenés stock parcial.</p>
                 </div>
                 {(calc.checkedCount > 0 || Object.keys(customQtyMap).length > 0) && (
                   <button
@@ -378,10 +378,10 @@ export default function CalculoCompra() {
                   const expanded = expandedCats[categoria] !== false;
                   const catTotal = items.reduce((s, i) => s + i.rowCost, 0);
                   return (
-                    <div key={categoria}>
+                    <div key={categoria} className="category-block">
                       <button
                         onClick={() => toggleCat(categoria)}
-                        className="flex items-center justify-between w-full px-3 py-2 bg-rose-50/90 hover:bg-rose-100/90 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 transition-colors border-b border-rose-200/60 dark:border-rose-900/40 select-none"
+                        className="category-header-btn flex items-center justify-between w-full px-3 py-2 bg-rose-50/90 hover:bg-rose-100/90 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 transition-colors border-b border-rose-200/60 dark:border-rose-900/40 select-none print:break-after-avoid"
                       >
                         <div className="flex items-center gap-2">
                           {expanded ? <ChevronDown className="w-4 h-4 text-rose-700 dark:text-rose-300" /> : <ChevronRight className="w-4 h-4 text-rose-700 dark:text-rose-300" />}
@@ -396,8 +396,9 @@ export default function CalculoCompra() {
                             <tr className="border-b border-border bg-muted/20 text-muted-foreground text-[11px] uppercase tracking-wider">
                               <th className="px-3 py-2 text-center w-10 print:hidden">Estado</th>
                               <th className="text-left font-medium px-3 py-2">Producto</th>
-                              <th className="text-right font-medium px-3 py-2">Cant. Recetada</th>
-                              <th className="text-right font-medium px-3 py-2">Cant. A Comprar</th>
+                              <th className="text-right font-medium px-3 py-2 print:hidden">Cant. Recetada</th>
+                              <th className="text-right font-medium px-3 py-2 print:hidden">Cant. A Comprar</th>
+                              <th className="text-right font-medium px-3 py-2 hidden print:table-cell">Cantidad</th>
                               {!hidePrices && <th className="text-right font-medium px-3 py-2">Precio unit.</th>}
                               {!hidePrices && <th className="text-right font-medium px-3 py-2">Costo total</th>}
                             </tr>
@@ -443,13 +444,13 @@ export default function CalculoCompra() {
                                     <p className="text-[11px] text-muted-foreground leading-none mt-0.5">{item.menu_nombres.join(', ')}</p>
                                   </td>
 
-                                  {/* Cant. Recetada / Necesaria */}
-                                  <td className={`px-3 py-2 text-right font-medium text-muted-foreground whitespace-nowrap text-xs ${isChecked ? 'line-through' : ''}`}>
+                                  {/* Cant. Recetada / Necesaria (pantalla interactiva) */}
+                                  <td className={`px-3 py-2 text-right font-medium text-muted-foreground whitespace-nowrap text-xs print:hidden ${isChecked ? 'line-through' : ''}`}>
                                     {formatNumber(item.cantidad_total, 3)} {item.unidad}
                                   </td>
 
-                                  {/* Cant. A Comprar (Editable) */}
-                                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                                  {/* Cant. A Comprar (pantalla interactiva editable) */}
+                                  <td className="px-3 py-2 text-right whitespace-nowrap print:hidden">
                                     <div className="inline-flex items-center justify-end gap-1">
                                       <input
                                         type="number"
@@ -473,6 +474,11 @@ export default function CalculoCompra() {
                                         (Stock en depósito: {formatNumber(item.cantidad_total - item.qtyToBuy, 2)} {item.unidad})
                                       </p>
                                     )}
+                                  </td>
+
+                                  {/* Cantidad Unificada (exclusiva para informe impreso / PDF) */}
+                                  <td className={`hidden print:table-cell px-3 py-2 text-right font-semibold whitespace-nowrap text-xs ${isChecked ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                                    {formatNumber(item.qtyToBuy, 3)} {item.unidad}
                                   </td>
 
                                   {/* Precio unit. */}
@@ -499,7 +505,7 @@ export default function CalculoCompra() {
                 })}
               </div>
               {!hidePrices && (
-                <div className="flex items-center justify-between px-5 py-4 bg-primary/5 border-t border-border">
+                <div className="flex items-center justify-between px-5 py-4 bg-primary/5 border-t border-border print:break-inside-avoid">
                   <span className="font-heading font-bold text-lg">Total a comprar</span>
                   <span className="font-heading font-bold text-lg text-primary">{formatPrice(calc.costoTotal)}</span>
                 </div>
