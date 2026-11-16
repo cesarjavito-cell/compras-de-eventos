@@ -12,6 +12,7 @@ import Productos from '@/pages/Productos';
 import Menus from '@/pages/Menus';
 import Eventos from '@/pages/Eventos';
 import CalculoCompra from '@/pages/CalculoCompra';
+import PreciosVenta from '@/pages/PreciosVenta';
 import Ajustes from '@/pages/Ajustes';
 import { Toaster as HotToaster } from 'react-hot-toast';
 
@@ -64,6 +65,7 @@ const AuthenticatedApp = () => {
         <Route path="/menus" element={<Menus />} />
         <Route path="/eventos" element={<Eventos />} />
         <Route path="/calculo" element={<CalculoCompra />} />
+        <Route path="/precios-venta" element={<PreciosVenta />} />
         <Route path="/ajustes" element={<Ajustes />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />

@@ -1,9 +1,21 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LayoutDashboard, Package, UtensilsCrossed, CalendarDays, ShoppingCart, ChefHat, Menu, X, LogOut, Settings, ChevronLeft } from 'lucide-react';
+import { LayoutDashboard, Package, UtensilsCrossed, CalendarDays, ShoppingCart, ChefHat, Menu, X, LogOut, Settings, ChevronLeft, CircleDollarSign } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 
-const navItems = [
+// Navegación completa para escritorio y menú lateral móvil (drawer)
+const sidebarNavItems = [
+  { label: 'Panel', path: '/', icon: LayoutDashboard },
+  { label: 'Productos', path: '/productos', icon: Package },
+  { label: 'Menús', path: '/menus', icon: UtensilsCrossed },
+  { label: 'Eventos', path: '/eventos', icon: CalendarDays },
+  { label: 'Cálculo', path: '/calculo', icon: ShoppingCart },
+  { label: 'Precios de Venta', path: '/precios-venta', icon: CircleDollarSign },
+  { label: 'Ajustes', path: '/ajustes', icon: Settings },
+];
+
+// Barra inferior móvil: conserva los 6 botones originales sin comprimir la interfaz
+const mobileBottomNavItems = [
   { label: 'Panel', path: '/', icon: LayoutDashboard },
   { label: 'Productos', path: '/productos', icon: Package },
   { label: 'Menús', path: '/menus', icon: UtensilsCrossed },
@@ -41,39 +53,51 @@ export default function Layout() {
     <div id="main-scroll" className="fixed inset-0 flex flex-col md:flex-row items-stretch overflow-y-auto bg-background w-full">
       {/* Mobile top bar */}
       <div
-        className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 py-3 bg-sidebar md:hidden"
+        className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 py-3 bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-primary))] border-b border-[hsl(var(--sidebar-border))] md:hidden"
         style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}
       >
-        <div className="flex items-center gap-2 text-sidebar-primary">
-          <img src="/app_logo.jpg" alt="Logo" className="w-8 h-8 rounded-lg object-cover border border-sidebar-border/30 shadow-sm" />
+        <div className="flex items-center gap-2 text-[hsl(var(--sidebar-primary))]">
+          <img src="/app_logo.jpg" alt="Logo" className="w-8 h-8 rounded-lg object-cover border border-[hsl(var(--sidebar-border))]/30 shadow-sm" />
           <span className="font-heading text-lg font-bold">La Juliana</span>
         </div>
-        <button
-          onClick={showBack ? handleTopBarClick : () => setMobileOpen(!mobileOpen)}
-          className="text-sidebar-primary min-w-[44px] min-h-[44px] flex items-center justify-center"
-        >
-          {showBack ? <ChevronLeft className="w-6 h-6" /> : (mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />)}
-        </button>
+        <div className="flex items-center gap-1">
+          {showBack && (
+            <button
+              onClick={handleTopBarClick}
+              aria-label="Volver"
+              className="text-[hsl(var(--sidebar-primary))] min-w-[44px] min-h-[44px] flex items-center justify-center"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label="Menú principal"
+            className="text-[hsl(var(--sidebar-primary))] min-w-[44px] min-h-[44px] flex items-center justify-center"
+          >
+            {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
       </div>
 
       {/* Sidebar */}
       <aside className={`
-        fixed md:sticky top-0 left-0 z-30 h-screen w-64 bg-sidebar flex flex-col
+        fixed md:sticky top-0 left-0 z-30 h-screen w-64 bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] border-r border-[hsl(var(--sidebar-border))] flex flex-col
         transform transition-transform duration-300
         ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        <div className="p-6 border-b border-sidebar-border">
+        <div className="p-6 border-b border-[hsl(var(--sidebar-border))]">
           <div className="flex items-center gap-3">
-            <img src="/app_logo.jpg" alt="Logo" className="w-10 h-10 rounded-xl object-cover border border-sidebar-border/40 shadow-sm" />
+            <img src="/app_logo.jpg" alt="Logo" className="w-10 h-10 rounded-xl object-cover border border-[hsl(var(--sidebar-border))]/40 shadow-sm" />
             <div>
-              <h1 className="font-heading text-lg font-bold text-sidebar-primary">La Juliana</h1>
-              <p className="text-xs text-sidebar-foreground/70">Compras de Eventos</p>
+              <h1 className="font-heading text-lg font-bold text-[hsl(var(--sidebar-primary))]">La Juliana</h1>
+              <p className="text-xs text-[hsl(var(--sidebar-foreground))]/70">Compras de Eventos</p>
             </div>
           </div>
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin">
-          {navItems.map((item) => {
+          {sidebarNavItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.path);
             return (
@@ -82,7 +106,7 @@ export default function Layout() {
                 to={item.path}
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all select-none min-h-[44px] ${
-                  active ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-primary'
+                  active ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-primary))]' : 'text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-accent))]/50 hover:text-[hsl(var(--sidebar-primary))]'
                 }`}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
@@ -92,10 +116,10 @@ export default function Layout() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-sidebar-border">
+        <div className="p-4 border-t border-[hsl(var(--sidebar-border))]">
           <button
             onClick={logout}
-            className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-primary transition-all select-none min-h-[44px]"
+            className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm font-medium text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-accent))]/50 hover:text-[hsl(var(--sidebar-primary))] transition-all select-none min-h-[44px]"
           >
             <LogOut className="w-5 h-5" />
             Cerrar sesión
@@ -117,11 +141,11 @@ export default function Layout() {
 
       {/* Bottom navigation (mobile only) */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 bg-sidebar border-t border-sidebar-border md:hidden"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-[hsl(var(--sidebar-background))] border-t border-[hsl(var(--sidebar-border))] md:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <div className="flex">
-          {navItems.map((item) => {
+          {mobileBottomNavItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.path);
             return (
@@ -130,7 +154,7 @@ export default function Layout() {
                 to={item.path}
                 onClick={() => setMobileOpen(false)}
                 className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 select-none min-h-[56px] ${
-                  active ? 'text-sidebar-primary' : 'text-sidebar-foreground/60'
+                  active ? 'text-[hsl(var(--sidebar-primary))]' : 'text-[hsl(var(--sidebar-foreground))]/60'
                 }`}
               >
                 <Icon className="w-5 h-5" />

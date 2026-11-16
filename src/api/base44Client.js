@@ -1,4 +1,11 @@
 import { fetchCloudData, pushCloudData } from './cloudSync';
+import {
+  validatePresupuesto,
+  checkPresupuestoImmutability,
+  DEFAULT_PORCENTAJE_COMERCIAL,
+  SETTING_KEY_DEFAULT_MARKUP,
+  validatePorcentajeComercial
+} from '../lib/presupuestoModel';
 
 // Restored backup data from user
 const initialData = {
@@ -280,7 +287,9 @@ const getLocalEntityData = (entityName) => {
   if (stored !== null) {
     try {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) {
+        if (parsed.length > 0 || !initialData[entityName]) return parsed;
+      }
     } catch {
       // fallback to initial
     }
@@ -314,9 +323,24 @@ const createLocalEntityHandler = (entityName) => ({
   list: async () => {
     return getLocalEntityData(entityName);
   },
+  get: async (id) => {
+    const list = getLocalEntityData(entityName);
+    return list.find(x => x.id === id) || null;
+  },
   create: async (item) => {
     const list = getLocalEntityData(entityName);
-    const newItem = { id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`, updated_date: new Date().toISOString(), ...item };
+    const prefix = entityName === 'Presupuesto' ? 'presup' : 'local';
+    const id = item.id || `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    const now = new Date().toISOString();
+    const newItem = {
+      ...item,
+      id,
+      updated_date: now,
+      fecha_creacion: item.fecha_creacion || now
+    };
+    if (entityName === 'Presupuesto') {
+      validatePresupuesto(newItem, { throwOnError: true });
+    }
     list.unshift(newItem);
     setLocalEntityData(entityName, list);
     notifyCloudSync();
@@ -326,11 +350,24 @@ const createLocalEntityHandler = (entityName) => ({
     const list = getLocalEntityData(entityName);
     const idx = list.findIndex(x => x.id === id);
     if (idx !== -1) {
-      list[idx] = { ...list[idx], ...patch, updated_date: new Date().toISOString() };
+      const current = list[idx];
+      if (entityName === 'Presupuesto') {
+        checkPresupuestoImmutability(current, patch);
+      }
+      const updatedItem = {
+        ...current,
+        ...patch,
+        updated_date: new Date().toISOString()
+      };
+      if (entityName === 'Presupuesto') {
+        validatePresupuesto(updatedItem, { throwOnError: true });
+      }
+      list[idx] = updatedItem;
       setLocalEntityData(entityName, list);
       notifyCloudSync();
+      return list[idx];
     }
-    return list[idx];
+    return null;
   },
   delete: async (id) => {
     let list = getLocalEntityData(entityName);
@@ -349,7 +386,18 @@ const createLocalEntityHandler = (entityName) => ({
         if (item[k] !== filter[k]) { match = false; break; }
       }
       if (match) {
-        list[idx] = { ...item, ...patch };
+        if (entityName === 'Presupuesto') {
+          checkPresupuestoImmutability(item, patch);
+        }
+        const updated = {
+          ...item,
+          ...patch,
+          updated_date: new Date().toISOString()
+        };
+        if (entityName === 'Presupuesto') {
+          validatePresupuesto(updated, { throwOnError: true });
+        }
+        list[idx] = updated;
         changed = true;
       }
     });
@@ -360,6 +408,7 @@ const createLocalEntityHandler = (entityName) => ({
     return true;
   }
 });
+
 
 // Force populate and push restored backup data on client load
 if (typeof window !== 'undefined') {
@@ -398,12 +447,14 @@ export const base44 = {
     Menu: createLocalEntityHandler('Menu'),
     Evento: createLocalEntityHandler('Evento'),
     Categoria: createLocalEntityHandler('Categoria'),
+    Presupuesto: createLocalEntityHandler('Presupuesto'),
   },
   clearAllData: () => {
     setLocalEntityData('Producto', []);
     setLocalEntityData('Categoria', initialData.Categoria);
     setLocalEntityData('Menu', []);
     setLocalEntityData('Evento', []);
+    setLocalEntityData('Presupuesto', []);
     notifyCloudSync();
   },
   resetFactoryData: () => {
@@ -411,6 +462,7 @@ export const base44 = {
     setLocalEntityData('Categoria', initialData.Categoria);
     setLocalEntityData('Menu', initialData.Menu);
     setLocalEntityData('Evento', initialData.Evento);
+    setLocalEntityData('Presupuesto', []);
     notifyCloudSync();
   },
   exportAllData: () => {
@@ -441,22 +493,44 @@ export const base44 = {
       }
     }
 
+    let porcentaje_comercial_default = DEFAULT_PORCENTAJE_COMERCIAL;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const storedMarkup = localStorage.getItem(SETTING_KEY_DEFAULT_MARKUP);
+      if (storedMarkup !== null && storedMarkup !== '') {
+        const parsed = Number(storedMarkup);
+        if (Number.isFinite(parsed) && !Number.isNaN(parsed) && parsed >= 0) {
+          porcentaje_comercial_default = parsed;
+        }
+      }
+    }
+
     return {
-      version: '2.0',
+      version: '2.2',
       app: 'compras-de-eventos',
+      configuracion: {
+        porcentaje_comercial_default
+      },
       productos: getLocalEntityData('Producto'),
       categorias: getLocalEntityData('Categoria'),
       menus: getLocalEntityData('Menu'),
       eventos: getLocalEntityData('Evento'),
+      presupuestos: getLocalEntityData('Presupuesto'),
       ajustes_cantidades,
       productos_en_deposito,
       export_date: new Date().toISOString()
     };
   },
-  importAllData: (data) => {
+  importAllData: (data, options = {}) => {
     if (!data || typeof data !== 'object') {
       throw new Error('El archivo no contiene un objeto JSON válido');
     }
+
+    if (data.app && data.app !== 'compras-de-eventos') {
+      throw new Error('El archivo corresponde a otra aplicación y no es compatible con Compras de Eventos');
+    }
+
+    const allowEmptyPresupuestos = options?.allowEmptyPresupuestos === true;
+    const warnings = [];
 
     // Validación estricta previa para evitar sobrescrituras parciales ante archivos corruptos
     if (data.productos !== undefined && !Array.isArray(data.productos)) {
@@ -471,40 +545,122 @@ export const base44 = {
     if (data.eventos !== undefined && !Array.isArray(data.eventos)) {
       throw new Error('El formato de "eventos" no es válido (debe ser una lista)');
     }
-    if (!data.productos && !data.categorias && !data.menus && !data.eventos) {
+    if (data.presupuestos !== undefined && !Array.isArray(data.presupuestos)) {
+      throw new Error('El formato de "presupuestos" no es válido (debe ser una lista)');
+    }
+    if (data.configuracion !== undefined) {
+      if (!data.configuracion || typeof data.configuracion !== 'object' || Array.isArray(data.configuracion)) {
+        throw new Error('El formato de "configuracion" no es válido (debe ser un objeto)');
+      }
+      if (data.configuracion.porcentaje_comercial_default !== undefined) {
+        try {
+          validatePorcentajeComercial(data.configuracion.porcentaje_comercial_default);
+        } catch (err) {
+          throw new Error(`Configuración comercial inválida: ${err.message}`);
+        }
+      }
+    }
+    if (!data.productos && !data.categorias && !data.menus && !data.eventos && !data.presupuestos && !data.configuracion) {
       throw new Error('El archivo no contiene datos compatibles de Compras de Eventos');
     }
 
-    // 1. Restaurar entidades base si están presentes
-    if (Array.isArray(data.productos)) setLocalEntityData('Producto', data.productos);
-    if (Array.isArray(data.categorias)) setLocalEntityData('Categoria', data.categorias);
-    if (Array.isArray(data.menus)) setLocalEntityData('Menu', data.menus);
-    if (Array.isArray(data.eventos)) setLocalEntityData('Evento', data.eventos);
+    // Validación profunda de cada presupuesto si vienen en el archivo
+    if (Array.isArray(data.presupuestos)) {
+      data.presupuestos.forEach((p, idx) => {
+        try {
+          validatePresupuesto(p, { throwOnError: true });
+        } catch (err) {
+          throw new Error(`Presupuesto inválido en índice [${idx}]: ${err.message}`);
+        }
+      });
+    }
 
-    // 2. Restaurar ajustes de cálculo si están presentes (soporte retrocompatible con backups antiguos)
-    if (typeof window !== 'undefined' && window.localStorage) {
-      if (data.ajustes_cantidades && typeof data.ajustes_cantidades === 'object') {
-        for (const [eventId, qtyMap] of Object.entries(data.ajustes_cantidades)) {
-          if (eventId && qtyMap && typeof qtyMap === 'object') {
-            try {
-              localStorage.setItem(`catering_calc_qty_${eventId}`, JSON.stringify(qtyMap));
-            } catch {}
+    // Planificación de escrituras para ejecución controlada
+    const plannedWrites = [];
+
+    // 1. Entidades base
+    if (Array.isArray(data.productos)) plannedWrites.push(['catering_local_Producto', JSON.stringify(data.productos)]);
+    if (Array.isArray(data.categorias)) plannedWrites.push(['catering_local_Categoria', JSON.stringify(data.categorias)]);
+    if (Array.isArray(data.menus)) plannedWrites.push(['catering_local_Menu', JSON.stringify(data.menus)]);
+    if (Array.isArray(data.eventos)) plannedWrites.push(['catering_local_Evento', JSON.stringify(data.eventos)]);
+
+    // 2. Presupuestos (Manejo de Escenarios A, B y C)
+    if (Array.isArray(data.presupuestos)) {
+      const currentPresupuestos = getLocalEntityData('Presupuesto');
+      if (data.presupuestos.length > 0) {
+        plannedWrites.push(['catering_local_Presupuesto', JSON.stringify(data.presupuestos)]);
+      } else {
+        // Colección vacía []
+        if (currentPresupuestos.length > 0) {
+          if (allowEmptyPresupuestos) {
+            // Escenario C: Reemplazo explícito por colección vacía
+            plannedWrites.push(['catering_local_Presupuesto', JSON.stringify([])]);
+          } else {
+            // Escenario B: Conservar por defecto y registrar advertencia
+            warnings.push('El archivo de respaldo contiene una lista de presupuestos vacía. Se conservaron los presupuestos locales existentes para evitar pérdidas accidentales.');
+            console.warn('Compras de Eventos [importAllData]: Respaldo con lista de presupuestos vacía. Se conservaron los presupuestos locales existentes.');
           }
+        } else {
+          plannedWrites.push(['catering_local_Presupuesto', JSON.stringify([])]);
         }
       }
+    }
+    // Escenario A: data.presupuestos === undefined -> no se planifica escritura, conservando locales.
 
-      if (data.productos_en_deposito && typeof data.productos_en_deposito === 'object') {
-        for (const [eventId, checkMap] of Object.entries(data.productos_en_deposito)) {
-          if (eventId && checkMap && typeof checkMap === 'object') {
-            try {
-              localStorage.setItem(`catering_calc_check_${eventId}`, JSON.stringify(checkMap));
-            } catch {}
+    // 3. Ajustes de cálculo de compras
+    if (data.ajustes_cantidades && typeof data.ajustes_cantidades === 'object') {
+      for (const [eventId, qtyMap] of Object.entries(data.ajustes_cantidades)) {
+        if (eventId && qtyMap && typeof qtyMap === 'object') {
+          plannedWrites.push([`catering_calc_qty_${eventId}`, JSON.stringify(qtyMap)]);
+        }
+      }
+    }
+
+    // 4. Estados de depósito de compras
+    if (data.productos_en_deposito && typeof data.productos_en_deposito === 'object') {
+      for (const [eventId, checkMap] of Object.entries(data.productos_en_deposito)) {
+        if (eventId && checkMap && typeof checkMap === 'object') {
+          plannedWrites.push([`catering_calc_check_${eventId}`, JSON.stringify(checkMap)]);
+        }
+      }
+    }
+
+    // 5. Configuración comercial
+    if (data.configuracion && data.configuracion.porcentaje_comercial_default !== undefined) {
+      const validMarkup = validatePorcentajeComercial(data.configuracion.porcentaje_comercial_default);
+      plannedWrites.push([SETTING_KEY_DEFAULT_MARKUP, String(validMarkup)]);
+    }
+
+
+    // Ejecución transaccional con Snapshot-and-Rollback en localStorage
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const rollbackSnapshot = new Map();
+      for (const [key] of plannedWrites) {
+        rollbackSnapshot.set(key, localStorage.getItem(key));
+      }
+
+      try {
+        for (const [key, val] of plannedWrites) {
+          localStorage.setItem(key, val);
+        }
+      } catch (writeErr) {
+        // Rollback ante errores de escritura (ej. QuotaExceededError)
+        for (const [key, prevVal] of rollbackSnapshot.entries()) {
+          try {
+            if (prevVal === null) {
+              localStorage.removeItem(key);
+            } else {
+              localStorage.setItem(key, prevVal);
+            }
+          } catch (revertErr) {
+            console.error('Compras de Eventos [importAllData]: Falló la reversión de clave durante rollback:', key, revertErr);
           }
         }
+        throw new Error(`Error al escribir datos en el almacenamiento local: ${writeErr.message}. Se realizó un rollback seguro restableciendo los datos originales.`);
       }
     }
 
     notifyCloudSync();
-    return true;
+    return { success: true, warnings };
   }
 };

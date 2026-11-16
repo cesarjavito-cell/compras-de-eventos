@@ -1,17 +1,65 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
-import { User, Trash2, Moon, Smartphone, Database, Download, Upload } from 'lucide-react';
+import { User, Trash2, Moon, Smartphone, Database, Download, Upload, TrendingUp, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import {
+  DEFAULT_PORCENTAJE_COMERCIAL,
+  SETTING_KEY_DEFAULT_MARKUP,
+  validatePorcentajeComercial,
+  getDefaultMarkupPercent
+} from '@/lib/presupuestoModel';
 
 export default function Ajustes() {
   const { user, logout } = useAuth();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  // Configuración comercial
+  const [markupPercent, setMarkupPercent] = useState('');
+  const [isCorrupted, setIsCorrupted] = useState(false);
+  const [corruptedRaw, setCorruptedRaw] = useState('');
+  const [markupError, setMarkupError] = useState('');
+
+  useEffect(() => {
+    const loaded = getDefaultMarkupPercent();
+    if (loaded && typeof loaded === 'object' && loaded.isCorrupted) {
+      setIsCorrupted(true);
+      setCorruptedRaw(loaded.rawValue);
+      setMarkupPercent('');
+    } else {
+      setIsCorrupted(false);
+      setMarkupPercent(String(loaded));
+    }
+  }, []);
+
+  const handleSaveMarkup = (e) => {
+    if (e) e.preventDefault();
+    try {
+      const validNum = validatePorcentajeComercial(markupPercent);
+      localStorage.setItem(SETTING_KEY_DEFAULT_MARKUP, String(validNum));
+      setMarkupPercent(String(validNum));
+      setMarkupError('');
+      setIsCorrupted(false);
+      toast.success('Porcentaje comercial guardado correctamente');
+    } catch (err) {
+      setMarkupError(err.message);
+      toast.error(err.message);
+    }
+  };
+
+  const handleResetCorruptedMarkup = () => {
+    localStorage.setItem(SETTING_KEY_DEFAULT_MARKUP, String(DEFAULT_PORCENTAJE_COMERCIAL));
+    setMarkupPercent(String(DEFAULT_PORCENTAJE_COMERCIAL));
+    setIsCorrupted(false);
+    setCorruptedRaw('');
+    setMarkupError('');
+    toast.success(`Configuración comercial restablecida al ${DEFAULT_PORCENTAJE_COMERCIAL}%`);
+  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -44,6 +92,74 @@ export default function Ajustes() {
             <p className="text-sm text-muted-foreground">{user?.email}</p>
           </div>
         </div>
+      </div>
+
+      {/* Configuración Comercial */}
+      <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-primary" />
+          <h2 className="font-heading font-semibold text-lg">Configuración Comercial</h2>
+        </div>
+        <p id="markup-desc" className="text-sm text-muted-foreground">
+          Porcentaje que se agregará al costo de los insumos para calcular el precio de venta. Podrás modificarlo para cada presupuesto.
+        </p>
+
+        {isCorrupted && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200 space-y-2">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+              <span>Valor de configuración corrupto detectado ("{corruptedRaw}")</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              El valor almacenado previamente en tu navegador no es un número válido. Podés restaurar el valor inicial del 40% presionando el botón abajo.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleResetCorruptedMarkup}
+              className="text-xs border-amber-500/40 hover:bg-amber-500/20"
+            >
+              Restablecer al 40% predeterminado
+            </Button>
+          </div>
+        )}
+
+        <form onSubmit={handleSaveMarkup} className="space-y-3 pt-1">
+          <div className="space-y-1.5">
+            <label htmlFor="markup-input" className="text-sm font-medium text-foreground">
+              Incremento comercial predeterminado (%)
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2.5 max-w-md">
+              <div className="relative flex-1">
+                <Input
+                  id="markup-input"
+                  type="number"
+                  step="any"
+                  min="0"
+                  max="1000"
+                  placeholder="Ej: 40"
+                  value={markupPercent}
+                  onChange={(e) => {
+                    setMarkupPercent(e.target.value);
+                    if (markupError) setMarkupError('');
+                  }}
+                  aria-describedby="markup-desc"
+                  className={markupError ? 'border-destructive focus-visible:ring-destructive pr-8' : 'pr-8'}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none select-none">
+                  %
+                </span>
+              </div>
+              <Button type="submit" className="min-w-[150px]">
+                Guardar porcentaje
+              </Button>
+            </div>
+            {markupError && (
+              <p className="text-xs text-destructive mt-1 font-medium">{markupError}</p>
+            )}
+          </div>
+        </form>
       </div>
 
       <div className="rounded-xl border border-border bg-card p-5 space-y-3">
