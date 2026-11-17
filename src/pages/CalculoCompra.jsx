@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
-import { ShoppingCart, Users, CalendarDays, UtensilsCrossed, TrendingUp, Package, Printer, ChevronDown, ChevronRight, EyeOff, Eye, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { ShoppingCart, Users, CalendarDays, UtensilsCrossed, TrendingUp, Package, Printer, ChevronDown, ChevronRight, EyeOff, Eye, RotateCcw, CheckCircle2, Download, Share2, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatPrice, formatNumber, formatDateLong } from '@/lib/format';
 import PullToRefresh from '@/components/PullToRefresh';
+import toast from 'react-hot-toast';
 
 const estadoLabels = {
   borrador: 'Borrador', confirmado: 'Confirmado', completado: 'Completado', cancelado: 'Cancelado',
@@ -17,10 +18,34 @@ export default function CalculoCompra() {
   const [loading, setLoading] = useState(false);
   const [expandedCats, setExpandedCats] = useState({});
   const [hidePrices, setHidePrices] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [logoBase64, setLogoBase64] = useState(null);
 
   // Checked and custom quantity states per event
   const [checkedMap, setCheckedMap] = useState({});
   const [customQtyMap, setCustomQtyMap] = useState({});
+
+  useEffect(() => {
+    let isMounted = true;
+    if (typeof window !== 'undefined' && window.fetch) {
+      fetch('/app_logo.jpg')
+        .then(res => {
+          if (!res.ok) throw new Error('Logo no accesible');
+          return res.blob();
+        })
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (isMounted && typeof reader.result === 'string') {
+              setLogoBase64(reader.result);
+            }
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(() => {});
+    }
+    return () => { isMounted = false; };
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -176,6 +201,58 @@ export default function CalculoCompra() {
 
   const handlePrint = () => window.print();
 
+  const handleDownloadPdf = async () => {
+    if (!selectedEvento || !calc || isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    try {
+      const { downloadShoppingListPdf } = await import('@/lib/shoppingListPdf');
+      const res = downloadShoppingListPdf({
+        evento: selectedEvento,
+        items: calc.items,
+        options: { logoBase64 }
+      });
+      if (res.empty) {
+        toast(res.message || 'No hay productos pendientes de compra para este evento', { icon: 'ℹ️' });
+      } else if (res.success) {
+        toast.success('Lista de compras descargada en PDF');
+      }
+    } catch (err) {
+      console.error('Error al descargar PDF de compras:', err);
+      toast.error(err.message || 'Error al generar el PDF de lista de compras');
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handleSharePdf = async () => {
+    if (!selectedEvento || !calc || isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    try {
+      const { shareShoppingListPdf } = await import('@/lib/shoppingListPdf');
+      const res = await shareShoppingListPdf({
+        evento: selectedEvento,
+        items: calc.items,
+        options: { logoBase64 }
+      });
+      if (res.empty) {
+        toast(res.message || 'No hay productos pendientes de compra para este evento', { icon: 'ℹ️' });
+      } else if (res.success) {
+        if (res.aborted) {
+          // Cancelación voluntaria del usuario sin error
+        } else if (res.method === 'web-share') {
+          toast.success('Lista de compras compartida');
+        } else if (res.method === 'download-fallback') {
+          toast(res.message || 'Descargando lista de compras en PDF...', { icon: '📥' });
+        }
+      }
+    } catch (err) {
+      console.error('Error al compartir PDF de compras:', err);
+      toast.error(err.message || 'Error al generar el PDF de compras');
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -229,13 +306,36 @@ export default function CalculoCompra() {
             </div>
           )}
           {calc && (
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card hover:bg-muted transition-colors text-xs sm:text-sm font-medium"
-            >
-              <Printer className="w-4 h-4" /> Imprimir
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted transition-colors text-xs sm:text-sm font-medium"
+                title="Imprimir documento en navegador"
+              >
+                <Printer className="w-4 h-4" /> Imprimir
+              </button>
+              <button
+                type="button"
+                disabled={isGeneratingPdf}
+                onClick={handleDownloadPdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted transition-colors text-xs sm:text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed shadow-sm select-none"
+                title="Descargar lista de compras en formato PDF A4"
+              >
+                {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <Download className="w-4 h-4 text-primary" />}
+                <span>Descargar PDF</span>
+              </button>
+              <button
+                type="button"
+                disabled={isGeneratingPdf}
+                onClick={handleSharePdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-transparent bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs sm:text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed shadow-sm select-none"
+                title="Compartir archivo PDF de lista de compras"
+              >
+                {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin text-primary-foreground" /> : <Share2 className="w-4 h-4" />}
+                <span>Compartir PDF</span>
+              </button>
+            </>
           )}
         </div>
       </div>
