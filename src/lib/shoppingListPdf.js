@@ -333,7 +333,17 @@ export function generateShoppingListPdf({ evento, items, options = {} }) {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
       doc.setTextColor(...COLORS.primary);
-      doc.text(`LISTA DE COMPRAS — ${eventoNombre.toUpperCase()}`, marginX, currentY);
+
+      // Evitar superposición si el nombre del evento es muy largo
+      const maxHeaderTitleW = contentWidth - 55;
+      let headerTitle = `LISTA DE COMPRAS — ${eventoNombre.toUpperCase()}`;
+      if (doc.getTextWidth(headerTitle) > maxHeaderTitleW) {
+        while (doc.getTextWidth(headerTitle + '...') > maxHeaderTitleW && headerTitle.length > 20) {
+          headerTitle = headerTitle.slice(0, -1);
+        }
+        headerTitle += '...';
+      }
+      doc.text(headerTitle, marginX, currentY);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.5);
@@ -351,19 +361,6 @@ export function generateShoppingListPdf({ evento, items, options = {} }) {
   // Renderizar primera cabecera
   renderHeader(true);
 
-  // Columnas de la tabla de compras
-  // [Casilla 8mm] [Producto 110mm] [Cantidad 34mm] [Unidad 30mm] = 182mm
-  const colX = {
-    check: marginX + 2,
-    checkW: 7,
-    producto: marginX + 11,
-    productoW: 105,
-    cantidad: marginX + 120,
-    cantidadW: 32,
-    unidad: marginX + 154,
-    unidadW: 26
-  };
-
   const checkPageBreak = (neededHeight) => {
     if (currentY + neededHeight > contentBottom) {
       doc.addPage();
@@ -374,92 +371,104 @@ export function generateShoppingListPdf({ evento, items, options = {} }) {
     return false;
   };
 
-  // Recorrer las categorías y sus productos
+  // Recorrer las categorías y sus productos en bloques compactos legibles
   for (const [categoria, catItems] of Object.entries(grouped)) {
-    // Espacio necesario para la categoría (cabecera de categoría + al menos 1 fila de producto)
-    checkPageBreak(18);
+    // Espacio preventivo para cabecera de categoría + al menos 1 ítem completo (~28mm)
+    checkPageBreak(28);
 
-    // Cabecera de Categoría
+    // Cabecera de Categoría institucional
     doc.setFillColor(...COLORS.primaryLight);
     doc.setDrawColor(...COLORS.primaryMedium);
-    doc.setLineWidth(0.2);
-    doc.rect(marginX, currentY, contentWidth, 6.5, 'FD');
+    doc.setLineWidth(0.25);
+    doc.roundedRect(marginX, currentY, contentWidth, 7, 1.5, 1.5, 'FD');
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setTextColor(...COLORS.primary);
-    doc.text(categoria.toUpperCase(), marginX + 3, currentY + 4.5);
+    doc.text(categoria.toUpperCase(), marginX + 3.5, currentY + 4.9);
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...COLORS.primaryMedium);
-    doc.text(`(${catItems.length} ítem${catItems.length !== 1 ? 's' : ''})`, pageWidth - marginX - 3, currentY + 4.5, { align: 'right' });
-
-    currentY += 8.5;
-
-    // Encabezado de columnas de la categoría
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...COLORS.textMuted);
-    doc.text('COMPRADO', colX.check, currentY);
-    doc.text('INSUMO / PRODUCTO', colX.producto, currentY);
-    doc.text('CANTIDAD', colX.cantidad + colX.cantidadW - 2, currentY, { align: 'right' });
-    doc.text('UNIDAD', colX.unidad, currentY);
+    doc.setFontSize(8);
+    doc.setTextColor(...COLORS.primaryMedium);
+    doc.text(`(${catItems.length} ítem${catItems.length !== 1 ? 's' : ''})`, pageWidth - marginX - 3.5, currentY + 4.9, { align: 'right' });
 
-    currentY += 2;
-    doc.setDrawColor(...COLORS.borderLight);
-    doc.setLineWidth(0.2);
-    doc.line(marginX, currentY, pageWidth - marginX, currentY);
-    currentY += 4;
+    currentY += 10.5;
 
-    // Filas de productos
+    // Filas de productos en bloque compacto optimizado para celular y A4
     for (const item of catItems) {
+      const maxTextWidth = contentWidth - 14; // 182 - 14 = 168 mm de ancho disponible
       const hasMenus = item.menu_nombres && item.menu_nombres.length > 0;
-      const rowHeight = hasMenus ? 9.5 : 7.5;
+      const qtyStr = formatShoppingQuantity(item.cantidad_a_comprar);
 
-      checkPageBreak(rowHeight);
-
-      // 1. Casilla de verificación cuadrada para tildar físicamente con lapicera (3.8 x 3.8 mm)
-      const boxSize = 3.8;
-      const boxY = currentY - 2.8;
-      doc.setDrawColor(...COLORS.primaryMedium);
-      doc.setLineWidth(0.3);
-      doc.rect(colX.check + 2, boxY, boxSize, boxSize, 'D');
-
-      // 2. Nombre del producto
+      // Calcular saltos de línea para nombres de productos extensos
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
-      doc.setTextColor(...COLORS.textDark);
-      doc.text(item.producto_nombre, colX.producto, currentY);
+      doc.setFontSize(12.5);
+      const prodLines = doc.splitTextToSize(item.producto_nombre, maxTextWidth);
+      const prodHeight = (prodLines.length - 1) * 4.8;
 
-      // Menús asociados si existen (letra pequeña en gris)
+      // Calcular altura requerida para esta fila antes de dibujarla (evita cortes entre páginas)
+      const rowNeededHeight = 6 + prodHeight + 6.5 + 4.5;
+      checkPageBreak(rowNeededHeight);
+
+      // 1. Casilla de verificación cuadrada ampliada (4.8 x 4.8 mm, trazo 0.35 mm)
+      const boxSize = 4.8;
+      const boxY = currentY - 3.4;
+      doc.setDrawColor(...COLORS.primaryMedium);
+      doc.setLineWidth(0.35);
+      doc.roundedRect(marginX + 1.5, boxY, boxSize, boxSize, 0.8, 0.8, 'D');
+
+      // 2. Nombre del producto en Línea 1 (12.5 pt, bold, textDark, multilínea seguro)
+      const textStartX = marginX + 10; // 24 mm
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12.5);
+      doc.setTextColor(...COLORS.textDark);
+      doc.text(prodLines, textStartX, currentY);
+
+      let nextLineY = currentY + prodHeight + 5.2;
+
+      // 3. Línea 2: Cantidad destacada (13.5 pt, bold, primary) + Unidad (11 pt, bold)
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13.5);
+      doc.setTextColor(...COLORS.primary);
+      doc.text(qtyStr, textStartX, nextLineY);
+
+      const qtyWidth = doc.getTextWidth(qtyStr);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(...COLORS.primaryMedium);
+      doc.text(item.unidad, textStartX + qtyWidth + 1.8, nextLineY);
+
+      // 4. Menús asociados si existen (inmediatamente a continuación)
       if (hasMenus) {
+        const unitWidth = doc.getTextWidth(item.unidad);
+        const menusStartX = textStartX + qtyWidth + 1.8 + unitWidth + 2.5;
+        const availableMenuWidth = pageWidth - marginX - menusStartX;
+
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7);
+        doc.setFontSize(8.5);
         doc.setTextColor(...COLORS.textMuted);
-        const menusText = `Menús: ${item.menu_nombres.join(', ')}`;
-        doc.text(menusText, colX.producto, currentY + 3.6);
+
+        const fullMenuText = `•  Menús: ${item.menu_nombres.join(', ')}`;
+        if (availableMenuWidth > 40) {
+          const menuLines = doc.splitTextToSize(fullMenuText, availableMenuWidth);
+          doc.text(menuLines[0] + (menuLines.length > 1 ? '...' : ''), menusStartX, nextLineY - 0.2);
+        } else {
+          // Si el ancho restante es muy corto, colocar menús en línea siguiente
+          nextLineY += 4.2;
+          const menuLines = doc.splitTextToSize(`Menús: ${item.menu_nombres.join(', ')}`, maxTextWidth);
+          doc.text(menuLines, textStartX, nextLineY);
+          nextLineY += (menuLines.length - 1) * 3.8;
+        }
       }
 
-      // 3. Cantidad a comprar (destacada y alineada a la derecha)
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(...COLORS.textDark);
-      const qtyStr = formatShoppingQuantity(item.cantidad_a_comprar);
-      doc.text(qtyStr, colX.cantidad + colX.cantidadW - 2, currentY, { align: 'right' });
+      currentY = nextLineY + 3.8;
 
-      // 4. Unidad de medida
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(...COLORS.textMuted);
-      doc.text(item.unidad, colX.unidad, currentY);
+      // 5. Separador tenue entre filas
+      doc.setDrawColor(235, 238, 235);
+      doc.setLineWidth(0.2);
+      doc.line(marginX, currentY, marginX + contentWidth, currentY);
 
-      // Separador tenue entre filas
-      doc.setDrawColor(240, 242, 239);
-      doc.setLineWidth(0.15);
-      doc.line(marginX, currentY + (hasMenus ? 5 : 2.5), pageWidth - marginX, currentY + (hasMenus ? 5 : 2.5));
-
-      currentY += rowHeight;
+      currentY += 4.5;
     }
 
     currentY += 3; // Margen tras finalizar cada categoría
