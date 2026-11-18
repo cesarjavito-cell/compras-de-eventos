@@ -1,11 +1,10 @@
-import { fetchCloudData, pushCloudData } from './cloudSync';
 import {
   validatePresupuesto,
   checkPresupuestoImmutability,
   DEFAULT_PORCENTAJE_COMERCIAL,
   SETTING_KEY_DEFAULT_MARKUP,
   validatePorcentajeComercial
-} from '../lib/presupuestoModel';
+} from '../lib/presupuestoModel.js';
 
 // Restored backup data from user
 const initialData = {
@@ -288,12 +287,15 @@ const getLocalEntityData = (entityName) => {
     try {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
-        if (parsed.length > 0 || !initialData[entityName]) return parsed;
+        // FASE 3.0.2: Si la clave existe en localStorage y es un array válido,
+        // se respeta íntegramente (incluso si es una colección intencionalmente vacía []).
+        return parsed;
       }
     } catch {
-      // fallback to initial
+      // fallback seguro si el JSON almacenado estaba corrupto
     }
   }
+  // Solo si la clave NO existe en absoluto en el almacenamiento (navegador virgen) se inicializa con los datos semilla.
   const init = initialData[entityName] || [];
   try {
     localStorage.setItem(key, JSON.stringify(init));
@@ -310,13 +312,8 @@ const setLocalEntityData = (entityName, data) => {
 };
 
 const notifyCloudSync = () => {
-  const currentData = {
-    productos: getLocalEntityData('Producto'),
-    categorias: getLocalEntityData('Categoria'),
-    menus: getLocalEntityData('Menu'),
-    eventos: getLocalEntityData('Evento'),
-  };
-  pushCloudData(currentData);
+  // FASE 3.0.2: Desactivado.
+  // Las mutaciones se resguardan de forma atómica y segura en localStorage sin llamadas inseguras a APIs públicas.
 };
 
 const createLocalEntityHandler = (entityName) => ({
@@ -410,33 +407,9 @@ const createLocalEntityHandler = (entityName) => ({
 });
 
 
-// Force populate and push restored backup data on client load
-if (typeof window !== 'undefined') {
-  setLocalEntityData('Producto', initialData.Producto);
-  setLocalEntityData('Categoria', initialData.Categoria);
-  setLocalEntityData('Menu', initialData.Menu);
-  setLocalEntityData('Evento', initialData.Evento);
-
-  const syncFromCloud = async () => {
-    const cloud = await fetchCloudData();
-    if (cloud && cloud._updatedAt) {
-      if (Array.isArray(cloud.productos) && cloud.productos.length > 0) setLocalEntityData('Producto', cloud.productos);
-      if (Array.isArray(cloud.categorias) && cloud.categorias.length > 0) setLocalEntityData('Categoria', cloud.categorias);
-      if (Array.isArray(cloud.menus) && cloud.menus.length > 0) setLocalEntityData('Menu', cloud.menus);
-      if (Array.isArray(cloud.eventos) && cloud.eventos.length > 0) setLocalEntityData('Evento', cloud.eventos);
-      window.dispatchEvent(new CustomEvent('catering-cloud-updated'));
-    }
-  };
-
-  // Push restored backup data to cloud right away
-  notifyCloudSync();
-
-  // Periodic poll every 4 seconds for live device sync
-  setInterval(syncFromCloud, 4000);
-
-  // Sync on window focus
-  window.addEventListener('focus', syncFromCloud);
-}
+// FASE 3.0.2: Se eliminan las escrituras incondicionales de initialData y el sondeo periódico a api.restful-api.dev.
+// La inicialización segura de colecciones se gestiona bajo demanda en getLocalEntityData exclusivamente cuando
+// una clave no existe en absoluto en el almacenamiento (navegador nuevo), respetando colecciones vacías o modificadas.
 
 export const base44 = {
   functions: {

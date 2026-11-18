@@ -14,6 +14,7 @@ import Eventos from '@/pages/Eventos';
 import CalculoCompra from '@/pages/CalculoCompra';
 import PreciosVenta from '@/pages/PreciosVenta';
 import Ajustes from '@/pages/Ajustes';
+import { base44 } from '@/api/base44Client';
 import { Toaster as HotToaster } from 'react-hot-toast';
 
 class ErrorBoundary extends React.Component {
@@ -30,6 +31,22 @@ class ErrorBoundary extends React.Component {
     console.error("ErrorBoundary caught error:", error, errorInfo);
   }
 
+  handleEmergencyDownload = () => {
+    try {
+      const data = base44.exportAllData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `catering_juliana_respaldo_emergencia_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error al generar respaldo de emergencia:', err);
+      alert('No se pudo generar la descarga automática. Sus datos locales en el dispositivo siguen preservados.');
+    }
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -37,17 +54,31 @@ class ErrorBoundary extends React.Component {
           <div className="max-w-md space-y-4">
             <h2 className="text-2xl font-bold font-heading text-foreground">La Juliana Catering</h2>
             <p className="text-muted-foreground text-sm">
-              La aplicación se ha actualizado. Presioná el botón para recargar el contenido.
+              Ocurrió un problema inesperado al mostrar la pantalla. Podés recargar la aplicación o descargar una copia de seguridad de tus datos para mayor tranquilidad.
             </p>
-            <button
-              onClick={() => {
-                localStorage.clear();
-                window.location.reload();
-              }}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium text-sm shadow-sm"
-            >
-              Recargar Aplicación
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.reload();
+                }}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium text-sm shadow-sm hover:opacity-90 transition-opacity"
+              >
+                Recargar Aplicación
+              </button>
+              <button
+                type="button"
+                onClick={this.handleEmergencyDownload}
+                className="px-4 py-2 bg-muted text-foreground border border-border rounded-lg font-medium text-sm shadow-sm hover:bg-muted/80 transition-colors"
+              >
+                Descargar Respaldo de Emergencia
+              </button>
+            </div>
+            {this.state.error?.message && (
+              <p className="text-xs text-muted-foreground/60 font-mono mt-4 text-left p-2 rounded bg-muted/30 overflow-auto max-h-24">
+                Detalle técnico: {this.state.error.message}
+              </p>
+            )}
           </div>
         </div>
       );
